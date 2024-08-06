@@ -2,6 +2,7 @@
 using System.IO;
 using Microsoft.Win32;
 using System.Windows;
+using AccountCheckerWPF.Enums;
 using AccountCheckerWPF.Models;
 using AccountCheckerWPF.Services;
 
@@ -16,10 +17,17 @@ namespace AccountCheckerWPF
         static SemaphoreSlim semaphore;
         static int botCount = 10;
         WorkerService _workerService = new WorkerService();
-        
+
         public MainWindow()
         {
             InitializeComponent();
+            LoadProxyTypes();
+        }
+
+        private void LoadProxyTypes()
+        {
+            // Populate ComboBox with enum values
+            ProxyTypeComboBox.ItemsSource = Enum.GetValues(typeof(ProxyTypeEnums));
         }
 
         private void SelectAccountFileBtn_Click(object sender, RoutedEventArgs e)
@@ -56,8 +64,28 @@ namespace AccountCheckerWPF
                 return;
             }
             
+            if (ProxyTypeComboBox.SelectedItem == null)
+            {
+                MessageBox.Show("No Proxy Type selected.");
+                return;
+            }
+
+            var proxy = new ProxyManager();
+            int proxyCount;
+            var selectedProxyType = (ProxyTypeEnums)ProxyTypeComboBox.SelectedItem;
+            try
+            {
+                proxyCount = proxy.LoadProxiesFromFile(SelectProxyFileTxt.Text, selectedProxyType);
+                Console.WriteLine($"Loaded {proxyCount} proxies");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Please ensure proxy file exist!");
+                Console.ReadLine();
+                return;
+            }
+
             var comboManager = new ComboManager();
-            
             int comboCount;
             try
             {
@@ -66,11 +94,11 @@ namespace AccountCheckerWPF
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Please ensure proxies.txt & combos.txt exist!");
+                Console.WriteLine("Please ensure combo file exist!");
                 Console.ReadLine();
                 return;
             }
-            
+
             string hitsDirectory = "./Hits";
             if (!Directory.Exists(hitsDirectory))
             {
@@ -97,6 +125,7 @@ namespace AccountCheckerWPF
                 {
                     AccCh.Add(combo);
                 }
+
                 AccCh.CompleteAdding();
 
                 Task.WhenAll(tasks);
