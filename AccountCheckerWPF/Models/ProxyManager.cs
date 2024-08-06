@@ -54,7 +54,7 @@ public class ProxyManager
         return ProxyList.Count(p => !p.Banned);
     }
 
-    public int LoadFromFile(string filename, ProxyTypeEnums proxyType)
+    public int LoadProxiesFromFile(string filename, ProxyTypeEnums proxyType)
     {
         ProxyType = proxyType;
         ProxyList = new List<Proxy>();
@@ -97,16 +97,16 @@ public class ProxyManager
 
         switch (ProxyType)
         {
-            case ProxyTypeEnums.HTTP: 
+            case ProxyTypeEnums.HTTP:
                 handler.Proxy = new WebProxy($"http://{proxy.Address}");
                 break;
-            case ProxyTypeEnums.SOCKS4: 
+            case ProxyTypeEnums.SOCKS4:
                 handler.Proxy = new WebProxy($"socks4://{proxy.Address}");
                 break;
-            case ProxyTypeEnums.SOCKS4A: 
+            case ProxyTypeEnums.SOCKS4A:
                 handler.Proxy = new WebProxy($"socks4a://{proxy.Address}");
                 break;
-            case ProxyTypeEnums.SOCKS5: 
+            case ProxyTypeEnums.SOCKS5:
                 handler.Proxy = new WebProxy($"socks5://{proxy.Address}");
                 break;
         }

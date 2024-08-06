@@ -1,8 +1,9 @@
-﻿using System.Net.Http;
+﻿using System.Collections.Concurrent;
+using System.IO;
 using Microsoft.Win32;
 using System.Windows;
-using AccountCheckerWPF.Enums;
 using AccountCheckerWPF.Models;
+using AccountCheckerWPF.Services;
 
 namespace AccountCheckerWPF
 {
@@ -11,6 +12,11 @@ namespace AccountCheckerWPF
     /// </summary>
     public partial class MainWindow : Window
     {
+        static BlockingCollection<string> AccCh = new BlockingCollection<string>();
+        static SemaphoreSlim semaphore;
+        static int botCount = 10;
+        WorkerService _workerService = new WorkerService();
+        
         public MainWindow()
         {
             InitializeComponent();
@@ -44,31 +50,58 @@ namespace AccountCheckerWPF
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(SelectAccountFileTxt.Text))
+            {
+                MessageBox.Show("Please select an account file first.");
+                return;
+            }
+            
+            var comboManager = new ComboManager();
+            
+            int comboCount;
             try
             {
-                var proxyManager = new ProxyManager();
-                int count = proxyManager.LoadFromFile(SelectProxyFileTxt.Text,
-                    ProxyTypeEnums.HTTP);
-
-                if (count > 0)
-                {
-                    Proxy proxy;
-                    var handler = proxyManager.GetRandomProxyTransport(out proxy);
-                    var client = new HttpClient(handler);
-
-                    var response =  client.GetAsync("https://httpbin.org/get");
-                    var content =  response.Result.Content.ReadAsStringAsync();
-
-                    MessageBox.Show("Response from https://httpbin.org/get:\n" + content);
-                }
-                else
-                {
-                    MessageBox.Show("No proxies loaded from file.");
-                }
+                comboCount = comboManager.LoadFromFile(SelectAccountFileTxt.Text);
+                Console.WriteLine($"Loaded {comboCount} combos");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error: " + ex.Message);
+                Console.WriteLine("Please ensure proxies.txt & combos.txt exist!");
+                Console.ReadLine();
+                return;
+            }
+            
+            string hitsDirectory = "./Hits";
+            if (!Directory.Exists(hitsDirectory))
+            {
+                Directory.CreateDirectory(hitsDirectory);
+                Console.WriteLine("Hits directory created.");
+            }
+            else
+            {
+                Console.WriteLine("Hits directory loaded.");
+            }
+
+            string hitFilePath = Path.Combine(hitsDirectory, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt");
+            using (StreamWriter hitFileWriter = new StreamWriter(hitFilePath, false))
+            {
+                semaphore = new SemaphoreSlim(botCount, botCount);
+
+                List<Task> tasks = new List<Task>();
+                for (int i = 0; i < botCount; i++)
+                {
+                    tasks.Add(Task.Run(() => _workerService.WorkerFunc()));
+                }
+
+                foreach (string combo in comboManager.ComboList)
+                {
+                    AccCh.Add(combo);
+                }
+                AccCh.CompleteAdding();
+
+                Task.WhenAll(tasks);
+
+                Console.WriteLine("Done checking!");
             }
         }
     }
