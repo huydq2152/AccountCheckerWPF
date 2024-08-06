@@ -3,8 +3,9 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
 using AccountCheckerWPF.Enums;
+using AccountCheckerWPF.Models;
 
-namespace AccountCheckerWPF.Models;
+namespace AccountCheckerWPF.Managers;
 
 public class ProxyManager
 {

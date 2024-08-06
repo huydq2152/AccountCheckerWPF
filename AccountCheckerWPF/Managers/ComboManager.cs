@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace AccountCheckerWPF.Models;
+namespace AccountCheckerWPF.Managers;
 
 public class ComboManager
 {
