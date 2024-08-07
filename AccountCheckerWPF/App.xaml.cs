@@ -1,6 +1,4 @@
-﻿using System.Configuration;
-using System.Data;
-using System.Windows;
+﻿using System.Windows;
 using AccountCheckerWPF.Services;
 using AccountCheckerWPF.Services.Interface;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,20 +22,14 @@ namespace AccountCheckerWPF
         private void ConfigureServices(ServiceCollection services)
         {
             services.AddSingleton<MainWindow>();
+            services.AddHttpClient<IHttpServices, HttpServices>();
             services.AddTransient<IHttpServices, HttpServices>();
         }
 
-        protected override void OnStartup(StartupEventArgs e)
+        private void OnStartup(object sender, StartupEventArgs e)
         {
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             mainWindow.Show();
-            base.OnStartup(e);
-        }
-
-        protected override void OnExit(ExitEventArgs e)
-        {
-            _serviceProvider.Dispose();
-            base.OnExit(e);
         }
     }
 }

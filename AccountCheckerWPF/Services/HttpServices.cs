@@ -8,11 +8,11 @@ namespace AccountCheckerWPF.Services;
 
 public class HttpServices : IHttpServices
 {
-    private readonly HttpClient _client;
+    private readonly HttpClient _httpClient;
 
-    public HttpServices(HttpClient client)
+    public HttpServices(HttpClient httpClient)
     {
-        _client = client;
+        _httpClient = httpClient;
     }
 
     public async Task<HttpResponseMessage> SendGetRequestAsync()
@@ -23,7 +23,7 @@ public class HttpServices : IHttpServices
         getRequest.Headers.Add("Accept", "*/*");
         getRequest.Headers.Add("Accept-Language", "en-US,en;q=0.8");
 
-        return await _client.SendAsync(getRequest);
+        return await _httpClient.SendAsync(getRequest);
     }
 
     public async Task<HttpResponseMessage> SendPostRequestAsync(string email, string password, string ppft,
@@ -69,7 +69,7 @@ public class HttpServices : IHttpServices
         postRequest.Headers.AcceptLanguage.Add(new StringWithQualityHeaderValue("en-US"));
         postRequest.Headers.AcceptLanguage.Add(new StringWithQualityHeaderValue("en", 0.9));
 
-        return await _client.SendAsync(postRequest);
+        return await _httpClient.SendAsync(postRequest);
     }
 
     public async Task<HttpResponseMessage> SendPostRequestToGetAccessTokenAsync(string refreshToken)

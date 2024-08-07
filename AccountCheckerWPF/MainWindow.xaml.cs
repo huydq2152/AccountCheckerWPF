@@ -16,13 +16,19 @@ namespace AccountCheckerWPF
 {
     public partial class MainWindow : Window
     {
+        public MainWindow()
+        {
+
+        }
+        
         private readonly IHttpServices _httpServices;
 
         public MainWindow(IHttpServices httpServices)
         {
-            _httpServices = httpServices;
             InitializeComponent();
             LoadProxyTypes();
+            
+            _httpServices = httpServices;
         }
 
         private BlockingCollection<string> _accCh = new BlockingCollection<string>();

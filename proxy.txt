@@ -1,7 +1,1 @@
-ipv4.reproxy.network:19000:phucprotn_16433:O9o7o4ZixB
-ipv4.reproxy.network:19001:phucprotn_16433:O9o7o4ZixB
-ipv4.reproxy.network:19002:phucprotn_16433:O9o7o4ZixB
-ipv4.reproxy.network:19003:phucprotn_16433:O9o7o4ZixB
-ipv4.reproxy.network:19004:phucprotn_16433:O9o7o4ZixB
-ipv4.reproxy.network:19005:phucprotn_16433:O9o7o4ZixB
-ipv4.reproxy.network:19006:phucprotn_16433:O9o7o4ZixB
+103.183.115.218:45501:xtpo7p3z:xTPO7p3Z
