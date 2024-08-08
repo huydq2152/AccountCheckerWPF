@@ -362,3 +362,7 @@ tempkey.jwk
 # documentation
 docs/TODO/*
 docs/bg/*
+
+# txt file
+@hotmail.com.txt
+proxy.txt

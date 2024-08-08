@@ -102,25 +102,24 @@ public static class CommonHelper
             return LoginKeyCheckStatus.Identity;
         }
 
-        return LoginKeyCheckStatus.Unknown;
+        return LoginKeyCheckStatus.Ban;
     }
-
-    public static async Task WriteToIdentityFile(string email, string password)
+    
+    public static async Task CloseStreamWritersAsync(StreamWriter? hitFileWriter, StreamWriter? keyCheckStatusFileWriter, StreamWriter? identityFileWriter)
     {
-        var hitsDirectory = "Hits";
-        var identityFilePath = Path.Combine(hitsDirectory, "identity.txt");
-
-        if (!Directory.Exists(hitsDirectory))
+        if (hitFileWriter != null)
         {
-            Directory.CreateDirectory(hitsDirectory);
+            await hitFileWriter.DisposeAsync();
+        }
+    
+        if (keyCheckStatusFileWriter != null)
+        {
+            await keyCheckStatusFileWriter.DisposeAsync();
         }
 
-        if (!File.Exists(identityFilePath))
+        if (identityFileWriter != null)
         {
-            File.Create(identityFilePath).Close();
+            await identityFileWriter.DisposeAsync();
         }
-
-        await using var file = new StreamWriter(identityFilePath, true);
-        await file.WriteLineAsync($"{email}:{password}");
     }
 }

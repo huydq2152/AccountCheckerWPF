@@ -23,11 +23,7 @@ public class HttpServices : IHttpServices
     {
         try
         {
-            var cookieContainer = new CookieContainer();
-            
             var httpClientHandler = _proxyManager.GetRandomProxyTransport(out _proxy);
-
-            httpClientHandler.CookieContainer = cookieContainer;
 
             _httpClient = new HttpClient(httpClientHandler)
             {

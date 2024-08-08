@@ -6,6 +6,5 @@ public enum LoginKeyCheckStatus
     Ban,
     Retry,
     Success,
-    Identity,
-    Unknown
+    Identity
 }

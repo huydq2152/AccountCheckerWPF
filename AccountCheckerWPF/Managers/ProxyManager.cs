@@ -85,6 +85,8 @@ public class ProxyManager
         proxy = GetRandomProxy();
         var handler = new HttpClientHandler
         {
+            CookieContainer = new CookieContainer(),
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
             SslProtocols = SslProtocols.Tls11 | SslProtocols.Tls12,
             ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
         };
