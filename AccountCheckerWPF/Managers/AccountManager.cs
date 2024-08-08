@@ -2,9 +2,9 @@ using System.IO;
 
 namespace AccountCheckerWPF.Managers;
 
-public class ComboManager
+public class AccountManager
 {
-    public List<string> ComboList { get; private set; } = new List<string>();
+    public List<string> Accounts { get; } = new();
 
     public int LoadFromFile(string filename)
     {
@@ -12,14 +12,13 @@ public class ComboManager
         {
             using (var reader = new StreamReader(filename))
             {
-                string line;
-                while ((line = reader.ReadLine()) != null)
+                while (reader.ReadLine() is { } line)
                 {
-                    ComboList.Add(line);
+                    Accounts.Add(line);
                 }
             }
 
-            return ComboList.Count;
+            return Accounts.Count;
         }
         catch (Exception ex)
         {

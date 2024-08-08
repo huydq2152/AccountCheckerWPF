@@ -5,7 +5,6 @@ using System.Windows;
 using AccountCheckerWPF.Enums;
 using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
-using AccountCheckerWPF.Services;
 using AccountCheckerWPF.Services.Interface;
 using Newtonsoft.Json.Linq;
 
@@ -13,9 +12,8 @@ namespace AccountCheckerWPF
 {
     public partial class MainWindow : Window
     {
-        private BlockingCollection<string> _accCh = new BlockingCollection<string>();
+        private readonly BlockingCollection<string> _accCh = new();
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
-        private int botCount = 1;
         private ConcurrentBag<Proxy> _proxies = new ConcurrentBag<Proxy>();
         private int _globalindex = 0;
         private int _retry = 0;
@@ -24,13 +22,16 @@ namespace AccountCheckerWPF
         private int _ban = 0;
         private int _identity = 0;
         private int _unknown = 0;
-        private ProxyManager _proxyManager = new ProxyManager();
-        private ComboManager _comboManager = new ComboManager();
+        private readonly ProxyManager _proxyManager;
+        private readonly AccountManager _accountManager ;
 
-        private IHttpServices _httpServices;
+        private readonly IHttpServices _httpServices;
 
-        public MainWindow()
+        public MainWindow(ProxyManager proxyManager, AccountManager accountManager, IHttpServices httpServices)
         {
+            _proxyManager = proxyManager;
+            _accountManager = accountManager;
+            _httpServices = httpServices;
             InitializeComponent();
             LoadProxyTypes();
         }
@@ -60,6 +61,14 @@ namespace AccountCheckerWPF
             }
         }
 
+        private void NumberOfBots_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            if (!int.TryParse(e.Text, out _))
+            {
+                e.Handled = true; 
+            }
+        }
+
         private async void CheckAccountBtn_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(SelectProxyFileTxt.Text))
@@ -80,11 +89,10 @@ namespace AccountCheckerWPF
                 return;
             }
 
-            int proxyCount;
             var selectedProxyType = (ProxyTypeEnums)ProxyTypeComboBox.SelectedItem;
             try
             {
-                proxyCount = _proxyManager.LoadProxiesFromFile(SelectProxyFileTxt.Text, selectedProxyType);
+                var proxyCount = _proxyManager.LoadProxiesFromFile(SelectProxyFileTxt.Text, selectedProxyType);
                 Console.WriteLine($"Loaded {proxyCount} proxies");
             }
             catch (Exception ex)
@@ -93,19 +101,20 @@ namespace AccountCheckerWPF
                 return;
             }
 
-            int comboCount;
             try
             {
-                comboCount = _comboManager.LoadFromFile(SelectAccountFileTxt.Text);
-                Console.WriteLine($"Loaded {comboCount} combos");
+                var accountCount = _accountManager.LoadFromFile(SelectAccountFileTxt.Text);
+                Console.WriteLine($"Loaded {accountCount} accounts");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Please ensure combo file exists!");
+                Console.WriteLine("Please ensure account file exists!");
                 return;
             }
+            
+            _httpServices.InitHttpClient();
 
-            string hitsDirectory = "./Hits";
+            var hitsDirectory = "./Hits";
             if (!Directory.Exists(hitsDirectory))
             {
                 Directory.CreateDirectory(hitsDirectory);
@@ -117,38 +126,37 @@ namespace AccountCheckerWPF
             }
 
             var hitFilePath = Path.Combine(hitsDirectory, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt");
-            using (StreamWriter hitFileWriter = new StreamWriter(hitFilePath, false))
+            
+            await using var hitFileWriter = new StreamWriter(hitFilePath, false);
+            var botCount = int.Parse(NumberOfBots.Text);
+            _semaphore = new SemaphoreSlim(botCount, botCount);
+
+            var tasks = new List<Task>();
+            for (var i = 0; i < botCount; i++)
             {
-                _semaphore = new SemaphoreSlim(botCount, botCount);
-
-                var tasks = new List<Task>();
-                for (var i = 0; i < botCount; i++)
-                {
-                    tasks.Add(Task.Run(WorkerFunc));
-                }
-
-                foreach (var combo in _comboManager.ComboList)
-                {
-                    _accCh.Add(combo);
-                }
-
-                _accCh.CompleteAdding();
-
-                await Task.WhenAll(tasks);
-
-                Console.WriteLine("Done checking!");
+                tasks.Add(Task.Run(WorkerFunc));
             }
+
+            foreach (var account in _accountManager.Accounts)
+            {
+                _accCh.Add(account);
+            }
+
+            _accCh.CompleteAdding();
+
+            await Task.WhenAll(tasks);
+
+            Console.WriteLine("Done checking!");
         }
 
         private async Task WorkerFunc()
         {
-            _httpServices = new HttpServices(_proxyManager, _comboManager);
             try
             {
                 await _semaphore.WaitAsync();
                 await Task.Run(async () =>
                 {
-                    while (_accCh.TryTake(out string account))
+                    while (_accCh.TryTake(out var account))
                     {
                         if (string.IsNullOrEmpty(account) || !account.Contains(":"))
                         {
@@ -305,18 +313,16 @@ namespace AccountCheckerWPF
         {
             foreach (var cookie in cookies)
             {
-                // Kiểm tra xem cookie có chứa tên cần tìm không
                 var parts = cookie.Split(';');
                 var cookiePart = parts.FirstOrDefault(p =>
                     p.Trim().StartsWith(cookieName + "=", StringComparison.OrdinalIgnoreCase));
                 if (cookiePart != null)
                 {
-                    // Trả về giá trị của cookie
                     return cookiePart.Split('=')[1];
                 }
             }
 
-            return null; // Nếu không tìm thấy cookie
+            return null; 
         }
 
         private string? ExtractValueBetween(string input, string leftDelim, string rightDelim)

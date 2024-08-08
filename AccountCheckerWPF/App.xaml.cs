@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Services;
 using AccountCheckerWPF.Services.Interface;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,8 @@ namespace AccountCheckerWPF
             services.AddSingleton<MainWindow>();
             services.AddHttpClient<IHttpServices, HttpServices>();
             services.AddSingleton<IHttpServices, HttpServices>();
+            services.AddSingleton<ProxyManager>();
+            services.AddSingleton<AccountManager>();
         }
 
         private void OnStartup(object sender, StartupEventArgs e)

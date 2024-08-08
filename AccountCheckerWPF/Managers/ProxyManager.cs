@@ -9,29 +9,27 @@ namespace AccountCheckerWPF.Managers;
 
 public class ProxyManager
 {
-    public List<Proxy> ProxyList { get; set; }
+    public List<Proxy> Proxies { get; set; }
     public ProxyTypeEnums ProxyType { get; set; }
-    public string ProxyAuthUser { get; set; }
-    public string ProxyAuthPass { get; set; }
-
-    private Random random = new Random();
+    public string AuthUser { get; set; }
+    public string AuthPass { get; set; }
 
     public Proxy GetRandomProxy()
     {
-        if (ProxyList.Count == 0)
+        if (Proxies.Count == 0)
         {
             return null;
         }
-        else if (ProxyList.Count == 1)
+        else if (Proxies.Count == 1)
         {
-            return ProxyList[0];
+            return Proxies[0];
         }
 
         Proxy proxy;
         var rand = new Random();
         while (true)
         {
-            proxy = ProxyList[rand.Next(ProxyList.Count)];
+            proxy = Proxies[rand.Next(Proxies.Count)];
             if (!proxy.InUse && !proxy.Banned)
             {
                 break;
@@ -39,7 +37,7 @@ public class ProxyManager
 
             if (GetLivingCount() == 0)
             {
-                foreach (var p in ProxyList)
+                foreach (var p in Proxies)
                 {
                     p.Banned = false;
                 }
@@ -52,13 +50,13 @@ public class ProxyManager
 
     public int GetLivingCount()
     {
-        return ProxyList.Count(p => !p.Banned);
+        return Proxies.Count(p => !p.Banned);
     }
 
     public int LoadProxiesFromFile(string filename, ProxyTypeEnums proxyType)
     {
         ProxyType = proxyType;
-        ProxyList = new List<Proxy>();
+        Proxies = new List<Proxy>();
 
         using (var file = new StreamReader(filename))
         {
@@ -68,18 +66,18 @@ public class ProxyManager
                 var parts = line.Split(':');
                 if (parts.Length == 4)
                 {
-                    ProxyList.Add(new Proxy { Address = $"{parts[0]}:{parts[1]}", InUse = false });
-                    ProxyAuthUser = parts[2];
-                    ProxyAuthPass = parts[3];
+                    Proxies.Add(new Proxy { Address = $"{parts[0]}:{parts[1]}", InUse = false });
+                    AuthUser = parts[2];
+                    AuthPass = parts[3];
                 }
                 else
                 {
-                    ProxyList.Add(new Proxy { Address = line, InUse = false });
+                    Proxies.Add(new Proxy { Address = line, InUse = false });
                 }
             }
         }
 
-        return ProxyList.Count;
+        return Proxies.Count;
     }
 
     public HttpClientHandler GetRandomProxyTransport(out Proxy proxy)
@@ -110,9 +108,9 @@ public class ProxyManager
                 break;
         }
 
-        if (!string.IsNullOrEmpty(ProxyAuthUser))
+        if (!string.IsNullOrEmpty(AuthUser))
         {
-            handler.Proxy.Credentials = new NetworkCredential(ProxyAuthUser, ProxyAuthPass);
+            handler.Proxy.Credentials = new NetworkCredential(AuthUser, AuthPass);
             handler.PreAuthenticate = true;
         }
 

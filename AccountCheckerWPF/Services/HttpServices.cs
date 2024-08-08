@@ -10,16 +10,22 @@ namespace AccountCheckerWPF.Services;
 
 public class HttpServices : IHttpServices
 {
-    private readonly HttpClient _httpClient;
-    private readonly Proxy _proxy;
+    private HttpClient _httpClient;
+    private Proxy _proxy;
+    private readonly ProxyManager _proxyManager;
 
-    public HttpServices(ProxyManager proxyManager, ComboManager comboManager)
+    public HttpServices(ProxyManager proxyManager)
     {
-        var cookieContainer = new CookieContainer();
+        _proxyManager = proxyManager;
+    }
 
+    public void InitHttpClient()
+    {
         try
         {
-            var httpClientHandler = proxyManager.GetRandomProxyTransport(out _proxy);
+            var cookieContainer = new CookieContainer();
+            
+            var httpClientHandler = _proxyManager.GetRandomProxyTransport(out _proxy);
 
             httpClientHandler.CookieContainer = cookieContainer;
 
@@ -30,10 +36,7 @@ public class HttpServices : IHttpServices
         }
         catch (Exception e)
         {
-            if (_proxy != null)
-            {
-                _proxy.InUse = false;
-            }
+            _proxy.InUse = false;
 
             throw;
         }

@@ -7,21 +7,21 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <Button x:Name="SelectAccountFileBtn" Content="Select account file" HorizontalAlignment="Left" Margin="49,30,0,0" VerticalAlignment="Top" Height="39" Width="118" Click="SelectAccountFileBtn_Click"/>
-        <Button x:Name="SelectProxyFileBtn" Content=" Select proxy file" HorizontalAlignment="Left" Margin="46,103,0,0" VerticalAlignment="Top" Height="36" Width="119" RenderTransformOrigin="0.5,0.5" Click="SelectProxyFileBtn_Click">
-            <Button.RenderTransform>
-                <TransformGroup>
-                    <ScaleTransform/>
-                    <SkewTransform AngleX="-0.839"/>
-                    <RotateTransform/>
-                    <TranslateTransform X="-0.454"/>
-                </TransformGroup>
-            </Button.RenderTransform>
-        </Button>
-        <TextBox x:Name="SelectAccountFileTxt" HorizontalAlignment="Left" Margin="200,32,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="391" Height="37"/>
-        <TextBox x:Name="SelectProxyFileTxt" HorizontalAlignment="Left" Margin="200,99,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="391" Height="37"/>
-        <Button x:Name="CheckAccountBtn" Content="Check account" HorizontalAlignment="Left" Height="52" Margin="49,255,0,0" VerticalAlignment="Top" Width="118" Click="CheckAccountBtn_Click"/>
-        
-        <ComboBox x:Name="ProxyTypeComboBox" HorizontalAlignment="Left" Margin="49,190,0,0" VerticalAlignment="Top" Width="118"/>
+        <TextBlock Text="Select account file for checker :" Margin="20,37,0,0" Height="22" Width="280" HorizontalAlignment="Left" VerticalAlignment="Top" />
+        <Button x:Name="SelectAccountFileBtn" Content="Select account file" HorizontalAlignment="Left" Margin="300,30,0,0" VerticalAlignment="Top" Height="30" Width="120" Click="SelectAccountFileBtn_Click"/>
+        <TextBox x:Name="SelectAccountFileTxt" HorizontalAlignment="Left" Margin="420,30,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="300" Height="30"/>
+
+        <TextBlock Text="Select proxy file for checker :" HorizontalAlignment="Left" Margin="20,97,0,0" VerticalAlignment="Top" Height="22" Width="280" />
+        <Button x:Name="SelectProxyFileBtn" Content=" Select proxy file" HorizontalAlignment="Left" Margin="300,90,0,0" VerticalAlignment="Top" Height="30" Width="120" Click="SelectProxyFileBtn_Click"/>
+        <TextBox x:Name="SelectProxyFileTxt" HorizontalAlignment="Left" Margin="420,90,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="300" Height="30"/>
+
+        <TextBlock Text="Select proxy type for checker :" HorizontalAlignment="Left" Margin="20,157,0,0" VerticalAlignment="Top" Height="22" Width="280" />
+        <ComboBox x:Name="ProxyTypeComboBox" HorizontalAlignment="Left" Margin="300,150,0,0" VerticalAlignment="Top" Width="420" Height="30"/>
+
+        <TextBlock HorizontalAlignment="Left" Margin="20,217,0,0" VerticalAlignment="Top" Height="22" Width="280" Text="Number of bots ( must be integer ) :" />
+        <TextBox x:Name="NumberOfBots" PreviewTextInput="NumberOfBots_PreviewTextInput" HorizontalAlignment="Left" Margin="300,210,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="420" Height="30"/>
+
+        <TextBlock HorizontalAlignment="Left" Margin="20,277,0,0" VerticalAlignment="Top" Height="22" Width="280" Text="Click to start check accounts :" />
+        <Button x:Name="CheckAccountBtn" Content="Check account" HorizontalAlignment="Left" Height="30" Margin="300,270,0,0" VerticalAlignment="Top" Width="120" Click="CheckAccountBtn_Click"/>
     </Grid>
 </Window>
