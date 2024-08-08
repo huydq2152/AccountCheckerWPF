@@ -12,22 +12,12 @@ public static class CommonHelper
         return (splitAccount[0], splitAccount[1]);
     }
 
-    public static string ExtractValue(string source, string start, string end)
-    {
-        var startIndex = source.IndexOf(start, StringComparison.Ordinal);
-        if (startIndex == -1) return string.Empty;
-        startIndex += start.Length;
-        var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
-        if (endIndex == -1) return string.Empty;
-        return source.Substring(startIndex, endIndex - startIndex);
-    }
-
     public static GetParamFromLoginPageData GetParamsFromLoginPage(string body)
     {
-        var bk = CommonHelper.ExtractValue(body, "bk=", "&");
-        var contextid = CommonHelper.ExtractValue(body, "contextid=", "&");
-        var uaid = CommonHelper.ExtractValue(body, "uaid=", "\"/>");
-        var ppft = CommonHelper.ExtractValue(body, "name=\"PPFT\" id=\"i0327\" value=\"", "\"");
+        var bk = ExtractValueBetween(body, "bk=", "&");
+        var contextid = ExtractValueBetween(body, "contextid=", "&");
+        var uaid = ExtractValueBetween(body, "uaid=", "\"/>");
+        var ppft = ExtractValueBetween(body, "name=\"PPFT\" id=\"i0327\" value=\"", "\"");
 
         return new GetParamFromLoginPageData
         {
@@ -37,6 +27,13 @@ public static class CommonHelper
             PPFT = ppft
         };
     }
+    
+    public static string? ExtractValueBetween(string input, string leftDelim, string rightDelim)
+    {
+        var startIndex = input.IndexOf(leftDelim, StringComparison.Ordinal) + leftDelim.Length;
+        var endIndex = input.IndexOf(rightDelim, startIndex, StringComparison.Ordinal);
+        return startIndex > -1 && endIndex > startIndex ? input.Substring(startIndex, endIndex - startIndex) : null;
+    }
 
     public static List<string> GetCookies(HttpResponseMessage postResponse)
     {
@@ -45,13 +42,14 @@ public static class CommonHelper
             : new List<string>();
     }
 
-    public static string? GetCookieValue(string cookieName, List<string>? cookies)
+    public static string? GetCookieValue(string key, List<string>? cookies)
     {
+        if (cookies == null) return null;
         foreach (var cookie in cookies)
         {
             var parts = cookie.Split(';');
             var cookiePart = parts.FirstOrDefault(p =>
-                p.Trim().StartsWith(cookieName + "=", StringComparison.OrdinalIgnoreCase));
+                p.Trim().StartsWith(key + "=", StringComparison.OrdinalIgnoreCase));
             if (cookiePart != null)
             {
                 return cookiePart.Split('=')[1];
@@ -61,14 +59,7 @@ public static class CommonHelper
         return null;
     }
 
-    public static string? ExtractValueBetween(string input, string leftDelim, string rightDelim)
-    {
-        var startIndex = input.IndexOf(leftDelim, StringComparison.Ordinal) + leftDelim.Length;
-        var endIndex = input.IndexOf(rightDelim, startIndex, StringComparison.Ordinal);
-        return startIndex > -1 && endIndex > startIndex ? input.Substring(startIndex, endIndex - startIndex) : null;
-    }
-
-    public static LoginKeyCheckStatus EvaluatePostLoginResponse(string bodyPost, List<string> cookies,
+    public static LoginKeyCheckStatus KeyCheckPostLoginResponse(string bodyPost, List<string> cookies,
         HttpResponseMessage postResponse)
     {
         if (bodyPost.Contains("Your account or password is incorrect.") ||
@@ -129,9 +120,7 @@ public static class CommonHelper
             File.Create(identityFilePath).Close();
         }
 
-        await using (var file = new StreamWriter(identityFilePath, true))
-        {
-            await file.WriteLineAsync($"{email}:{password}");
-        }
+        await using var file = new StreamWriter(identityFilePath, true);
+        await file.WriteLineAsync($"{email}:{password}");
     }
 }

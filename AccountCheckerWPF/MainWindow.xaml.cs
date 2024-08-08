@@ -9,6 +9,7 @@ using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
 using AccountCheckerWPF.Services.Interface;
 using Newtonsoft.Json.Linq;
+using AccountManager = AccountCheckerWPF.Managers.AccountManager;
 
 namespace AccountCheckerWPF
 {
@@ -210,7 +211,7 @@ namespace AccountCheckerWPF
             string email, string password)
         {
             var cookies = CommonHelper.GetCookies(postResponse);
-            var responseStatus = CommonHelper.EvaluatePostLoginResponse(bodyPost, cookies, postResponse);
+            var responseStatus = CommonHelper.KeyCheckPostLoginResponse(bodyPost, cookies, postResponse);
 
             switch (responseStatus)
             {
