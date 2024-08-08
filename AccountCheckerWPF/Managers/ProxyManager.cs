@@ -91,11 +91,6 @@ public class ProxyManager
             ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
         };
 
-        if (proxy == null)
-        {
-            return handler;
-        }
-
         switch (ProxyType)
         {
             case ProxyTypeEnums.HTTP:
@@ -109,6 +104,9 @@ public class ProxyManager
                 break;
             case ProxyTypeEnums.SOCKS5:
                 handler.Proxy = new WebProxy($"socks5://{proxy.Address}");
+                break;
+            default:
+                handler.Proxy = new WebProxy($"http://{proxy.Address}");
                 break;
         }
 
