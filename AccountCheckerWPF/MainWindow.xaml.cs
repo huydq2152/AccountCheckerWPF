@@ -9,7 +9,6 @@ using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
 using AccountCheckerWPF.Services.Interface;
 using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json.Linq;
 using AccountManager = AccountCheckerWPF.Managers.AccountManager;
 
 namespace AccountCheckerWPF
@@ -33,7 +32,7 @@ namespace AccountCheckerWPF
         private StreamWriter _hitFileWriter;
         private StreamWriter _keyCheckStatusFileWriter;
         private StreamWriter _identityFileWriter;
-        
+
         private readonly IServiceScopeFactory _scopeFactory;
 
         public MainWindow(ProxyManager proxyManager, AccountManager accountManager, IServiceScopeFactory scopeFactory)
@@ -228,7 +227,8 @@ namespace AccountCheckerWPF
                     var responseBodyPostLogin = await responsePostLogin.Content.ReadAsStringAsync();
 
                     var retryStatus =
-                        await HandlePostLoginResponse(responsePostLogin, responseBodyPostLogin, email, password, httpServices);
+                        await HandlePostLoginResponse(responsePostLogin, responseBodyPostLogin, email, password,
+                            httpServices);
                     if (retryStatus != RetryStatus.Retry)
                         break;
                 }
@@ -244,6 +244,8 @@ namespace AccountCheckerWPF
         {
             var cookies = CommonHelper.GetCookies(postResponse);
             var responseStatus = CommonHelper.KeyCheckPostLoginResponse(bodyPost, cookies, postResponse);
+
+            Console.WriteLine(responseStatus);
 
             switch (responseStatus)
             {
@@ -264,7 +266,11 @@ namespace AccountCheckerWPF
                 case LoginKeyCheckStatus.Success:
                     _success++;
                     await _hitFileWriter.WriteLineAsync($"{email}:{password} - Success");
-                    await httpServices.HandleLoginSuccessResponse(postResponse, cookies);
+                    var account = new Account
+                    {
+                        Combo = $"Username: {email} | Password: {password}"
+                    };
+                    await httpServices.HandleLoginSuccessResponse(postResponse, cookies, account);
                     return RetryStatus.Done;
 
                 case LoginKeyCheckStatus.Identity:

@@ -6,19 +6,15 @@ public class AccountManager
 {
     public List<string> Accounts { get; } = new();
 
-    public int LoadFromFile(string filename)
+    public void LoadFromFile(string filename)
     {
         try
         {
-            using (var reader = new StreamReader(filename))
+            using var reader = new StreamReader(filename);
+            while (reader.ReadLine() is { } line)
             {
-                while (reader.ReadLine() is { } line)
-                {
-                    Accounts.Add(line);
-                }
+                Accounts.Add(line);
             }
-
-            return Accounts.Count;
         }
         catch (Exception ex)
         {

@@ -9,33 +9,32 @@ namespace AccountCheckerWPF.Managers;
 
 public class ProxyManager
 {
-    public List<Proxy> Proxies { get; set; }
-    public ProxyTypeEnums ProxyType { get; set; }
-    public string AuthUser { get; set; }
-    public string AuthPass { get; set; }
+    private List<Proxy?>? Proxies { get; set; }
+    private ProxyTypeEnums ProxyType { get; set; }
+    private string? AuthUser { get; set; }
+    private string? AuthPass { get; set; }
 
-    public Proxy GetRandomProxy()
+    private Proxy? GetRandomProxy()
     {
-        if (Proxies.Count == 0)
+        switch (Proxies?.Count)
         {
-            return null;
-        }
-        else if (Proxies.Count == 1)
-        {
-            return Proxies[0];
+            case 0:
+                return null;
+            case 1:
+                return Proxies[0];
         }
 
-        Proxy proxy;
+        Proxy? proxy;
         var rand = new Random();
         while (true)
         {
-            proxy = Proxies[rand.Next(Proxies.Count)];
-            if (!proxy.InUse && !proxy.Banned)
+            proxy = Proxies?[rand.Next(Proxies.Count)];
+            if (proxy is { InUse: false, Banned: false })
             {
                 break;
             }
 
-            if (GetLivingCount() == 0)
+            if (GetLivingCount() == 0 && Proxies != null)
             {
                 foreach (var p in Proxies)
                 {
@@ -48,39 +47,34 @@ public class ProxyManager
         return proxy;
     }
 
-    public int GetLivingCount()
+    private int GetLivingCount()
     {
-        return Proxies.Count(p => !p.Banned);
+        return Proxies?.Count(p => p is { Banned: false }) ?? 0;
     }
 
-    public int LoadProxiesFromFile(string filename, ProxyTypeEnums proxyType)
+    public void LoadProxiesFromFile(string filename, ProxyTypeEnums proxyType)
     {
         ProxyType = proxyType;
-        Proxies = new List<Proxy>();
+        Proxies = new List<Proxy?>();
 
-        using (var file = new StreamReader(filename))
+        using var file = new StreamReader(filename);
+        while (file.ReadLine() is { } line)
         {
-            string line;
-            while ((line = file.ReadLine()) != null)
+            var parts = line.Split(':');
+            if (parts.Length == 4)
             {
-                var parts = line.Split(':');
-                if (parts.Length == 4)
-                {
-                    Proxies.Add(new Proxy { Address = $"{parts[0]}:{parts[1]}", InUse = false });
-                    AuthUser = parts[2];
-                    AuthPass = parts[3];
-                }
-                else
-                {
-                    Proxies.Add(new Proxy { Address = line, InUse = false });
-                }
+                Proxies.Add(new Proxy { Address = $"{parts[0]}:{parts[1]}", InUse = false });
+                AuthUser = parts[2];
+                AuthPass = parts[3];
+            }
+            else
+            {
+                Proxies.Add(new Proxy { Address = line, InUse = false });
             }
         }
-
-        return Proxies.Count;
     }
 
-    public HttpClientHandler GetRandomProxyTransport(out Proxy proxy)
+    public HttpClientHandler GetRandomProxyTransport(out Proxy? proxy)
     {
         proxy = GetRandomProxy();
         var handler = new HttpClientHandler
@@ -91,30 +85,18 @@ public class ProxyManager
             ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
         };
 
-        switch (ProxyType)
+        handler.Proxy = ProxyType switch
         {
-            case ProxyTypeEnums.HTTP:
-                handler.Proxy = new WebProxy($"http://{proxy.Address}");
-                break;
-            case ProxyTypeEnums.SOCKS4:
-                handler.Proxy = new WebProxy($"socks4://{proxy.Address}");
-                break;
-            case ProxyTypeEnums.SOCKS4A:
-                handler.Proxy = new WebProxy($"socks4a://{proxy.Address}");
-                break;
-            case ProxyTypeEnums.SOCKS5:
-                handler.Proxy = new WebProxy($"socks5://{proxy.Address}");
-                break;
-            default:
-                handler.Proxy = new WebProxy($"http://{proxy.Address}");
-                break;
-        }
+            ProxyTypeEnums.HTTP => new WebProxy($"http://{proxy?.Address}"),
+            ProxyTypeEnums.SOCKS4 => new WebProxy($"socks4://{proxy?.Address}"),
+            ProxyTypeEnums.SOCKS4A => new WebProxy($"socks4a://{proxy?.Address}"),
+            ProxyTypeEnums.SOCKS5 => new WebProxy($"socks5://{proxy?.Address}"),
+            _ => new WebProxy($"http://{proxy?.Address}")
+        };
 
-        if (!string.IsNullOrEmpty(AuthUser))
-        {
-            handler.Proxy.Credentials = new NetworkCredential(AuthUser, AuthPass);
-            handler.PreAuthenticate = true;
-        }
+        if (string.IsNullOrEmpty(AuthUser)) return handler;
+        handler.Proxy.Credentials = new NetworkCredential(AuthUser, AuthPass);
+        handler.PreAuthenticate = true;
 
         return handler;
     }

@@ -3,8 +3,8 @@ namespace AccountCheckerWPF.Models;
 public class Account
 {
     public string Combo { get; set; }
-    
-    public List<string> Capture { get; private set; } = new List<string>();
+
+    private List<string> Capture { get; set; } = new List<string>();
 
     public void AddCaptureStr(string name, string data)
     {

