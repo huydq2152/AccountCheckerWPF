@@ -9,4 +9,6 @@ public interface IHttpServices
     public Task<HttpResponseMessage> SendPostLoginRequestAsync(string email, string password, string ppft, string contextid,
         string bk, string uaid);
     public Task<HttpResponseMessage> SendPostRequestToGetAccessTokenAsync(string refreshToken);
+    public Task HandleLoginSuccessResponse(HttpResponseMessage postResponse, List<string> cookies);
+    public Task ProcessEmailData(string accessToken, string cid);
 }

