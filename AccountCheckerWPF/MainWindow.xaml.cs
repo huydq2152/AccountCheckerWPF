@@ -8,6 +8,7 @@ using AccountCheckerWPF.Helper;
 using AccountCheckerWPF.Managers;
 using AccountCheckerWPF.Models;
 using AccountCheckerWPF.Services.Interface;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Linq;
 using AccountManager = AccountCheckerWPF.Managers.AccountManager;
 
@@ -32,14 +33,14 @@ namespace AccountCheckerWPF
         private StreamWriter _hitFileWriter;
         private StreamWriter _keyCheckStatusFileWriter;
         private StreamWriter _identityFileWriter;
+        
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        private readonly IHttpServices _httpServices;
-
-        public MainWindow(ProxyManager proxyManager, AccountManager accountManager, IHttpServices httpServices)
+        public MainWindow(ProxyManager proxyManager, AccountManager accountManager, IServiceScopeFactory scopeFactory)
         {
             _proxyManager = proxyManager;
             _accountManager = accountManager;
-            _httpServices = httpServices;
+            _scopeFactory = scopeFactory;
             InitializeComponent();
             LoadProxyTypes();
         }
@@ -124,8 +125,6 @@ namespace AccountCheckerWPF
 
             #endregion
 
-            _httpServices.InitHttpClient();
-
             var resultDirectory = "./Results";
             if (!Directory.Exists(resultDirectory))
             {
@@ -185,6 +184,8 @@ namespace AccountCheckerWPF
 
         private async Task WorkerFunc()
         {
+            using var scope = _scopeFactory.CreateScope();
+            var httpServices = scope.ServiceProvider.GetRequiredService<IHttpServices>();
             try
             {
                 await _semaphore.WaitAsync();
@@ -197,7 +198,7 @@ namespace AccountCheckerWPF
                             continue;
                         }
 
-                        await ProcessAccountAsync(account);
+                        await ProcessAccountAsync(account, httpServices);
                     }
                 });
             }
@@ -207,7 +208,7 @@ namespace AccountCheckerWPF
             }
         }
 
-        private async Task ProcessAccountAsync(string account)
+        private async Task ProcessAccountAsync(string account, IHttpServices httpServices)
         {
             var (email, password) = CommonHelper.ParseAccountStr(account);
 
@@ -215,19 +216,19 @@ namespace AccountCheckerWPF
             {
                 try
                 {
-                    var responseGetParamsFromLoginPage = await _httpServices.SendGetParamsFromLoginPageRequestAsync();
+                    var responseGetParamsFromLoginPage = await httpServices.SendGetParamsFromLoginPageRequestAsync();
                     var paramsFromLoginPage =
                         CommonHelper.GetParamsFromLoginPage(await responseGetParamsFromLoginPage.Content
                             .ReadAsStringAsync());
 
-                    var responsePostLogin = await _httpServices.SendPostLoginRequestAsync(email, password,
+                    var responsePostLogin = await httpServices.SendPostLoginRequestAsync(email, password,
                         paramsFromLoginPage.PPFT,
                         paramsFromLoginPage.ContextId, paramsFromLoginPage.BK, paramsFromLoginPage.UAID);
 
                     var responseBodyPostLogin = await responsePostLogin.Content.ReadAsStringAsync();
 
                     var retryStatus =
-                        await HandlePostLoginResponse(responsePostLogin, responseBodyPostLogin, email, password);
+                        await HandlePostLoginResponse(responsePostLogin, responseBodyPostLogin, email, password, httpServices);
                     if (retryStatus != RetryStatus.Retry)
                         break;
                 }
@@ -239,7 +240,7 @@ namespace AccountCheckerWPF
         }
 
         private async Task<RetryStatus> HandlePostLoginResponse(HttpResponseMessage postResponse, string bodyPost,
-            string email, string password)
+            string email, string password, IHttpServices httpServices)
         {
             var cookies = CommonHelper.GetCookies(postResponse);
             var responseStatus = CommonHelper.KeyCheckPostLoginResponse(bodyPost, cookies, postResponse);
@@ -263,7 +264,7 @@ namespace AccountCheckerWPF
                 case LoginKeyCheckStatus.Success:
                     _success++;
                     await _hitFileWriter.WriteLineAsync($"{email}:{password} - Success");
-                    await _httpServices.HandleLoginSuccessResponse(postResponse, cookies);
+                    await httpServices.HandleLoginSuccessResponse(postResponse, cookies);
                     return RetryStatus.Done;
 
                 case LoginKeyCheckStatus.Identity:

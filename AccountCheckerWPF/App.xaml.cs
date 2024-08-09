@@ -20,11 +20,11 @@ namespace AccountCheckerWPF
             _serviceProvider = serviceCollection.BuildServiceProvider();
         }
 
-        private void ConfigureServices(ServiceCollection services)
+        private void ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<MainWindow>();
             services.AddHttpClient<IHttpServices, HttpServices>();
-            services.AddSingleton<IHttpServices, HttpServices>();
+            services.AddScoped<IHttpServices, HttpServices>();
             services.AddSingleton<ProxyManager>();
             services.AddSingleton<AccountManager>();
         }

@@ -12,20 +12,14 @@ namespace AccountCheckerWPF.Services;
 
 public class HttpServices : IHttpServices
 {
-    private HttpClient _httpClient;
-    private Proxy _proxy;
-    private readonly ProxyManager _proxyManager;
+    private readonly HttpClient _httpClient;
+    private readonly Proxy _proxy;
 
     public HttpServices(ProxyManager proxyManager)
     {
-        _proxyManager = proxyManager;
-    }
-
-    public void InitHttpClient()
-    {
         try
         {
-            var httpClientHandler = _proxyManager.GetRandomProxyTransport(out _proxy);
+            var httpClientHandler = proxyManager.GetRandomProxyTransport(out _proxy);
 
             _httpClient = new HttpClient(httpClientHandler)
             {
@@ -34,7 +28,7 @@ public class HttpServices : IHttpServices
         }
         catch (Exception e)
         {
-            _proxy.InUse = false;
+            if (_proxy != null) _proxy.InUse = false;
 
             throw;
         }
@@ -113,7 +107,7 @@ public class HttpServices : IHttpServices
     }
 
 
-    public async Task<HttpResponseMessage> SendPostRequestToGetAccessTokenAsync(string refreshToken)
+    private async Task<HttpResponseMessage> SendPostRequestToGetAccessTokenAsync(string refreshToken)
     {
         try
         {
@@ -162,7 +156,7 @@ public class HttpServices : IHttpServices
         }
     }
 
-    public async Task ProcessEmailData(string accessToken, string cid)
+    private async Task ProcessEmailData(string accessToken, string cid)
     {
         var url =
             "https://outlook.office.com/api/beta/me/MailFolders/AllItems/messages?$select=Sender,Subject,From,CcRecipients,HasAttachments,Id,SentDateTime,ToRecipients,BccRecipients&$top=1000&$search=\"from:advertise-noreply@support.facebook.com\"";
