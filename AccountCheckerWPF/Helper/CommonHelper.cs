@@ -27,7 +27,7 @@ public static class CommonHelper
             PPFT = ppft
         };
     }
-    
+
     public static string? ExtractValueBetween(string input, string leftDelim, string rightDelim)
     {
         var startIndex = input.IndexOf(leftDelim, StringComparison.Ordinal) + leftDelim.Length;
@@ -81,7 +81,7 @@ public static class CommonHelper
             return LoginKeyCheckStatus.Ban;
         }
 
-        if (bodyPost.Contains("sign in too many times"))
+        if (bodyPost.Contains("sign in too many times") || bodyPost.Contains("Too Many Requests"))
         {
             return LoginKeyCheckStatus.Retry;
         }
@@ -104,14 +104,15 @@ public static class CommonHelper
 
         return LoginKeyCheckStatus.Ban;
     }
-    
-    public static async Task CloseStreamWritersAsync(StreamWriter? hitFileWriter, StreamWriter? keyCheckStatusFileWriter, StreamWriter? identityFileWriter)
+
+    public static async Task CloseStreamWritersAsync(StreamWriter? hitFileWriter,
+        StreamWriter? keyCheckStatusFileWriter, StreamWriter? identityFileWriter)
     {
         if (hitFileWriter != null)
         {
             await hitFileWriter.DisposeAsync();
         }
-    
+
         if (keyCheckStatusFileWriter != null)
         {
             await keyCheckStatusFileWriter.DisposeAsync();

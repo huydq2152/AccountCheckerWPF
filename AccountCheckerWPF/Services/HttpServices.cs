@@ -167,7 +167,6 @@ public class HttpServices : IHttpServices
         var url =
             "https://outlook.office.com/api/beta/me/MailFolders/AllItems/messages?$select=Sender,Subject,From,CcRecipients,HasAttachments,Id,SentDateTime,ToRecipients,BccRecipients&$top=1000&$search=\"from:advertise-noreply@support.facebook.com\"";
 
-        // Set up headers
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Outlook-Android/2.0");
         _httpClient.DefaultRequestHeaders.Add("Pragma", "no-cache");
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
@@ -193,7 +192,7 @@ public class HttpServices : IHttpServices
             foreach (var subject in subjects)
             {
                 var adsTitle = System.Web.HttpUtility.HtmlDecode(subject);
-                int adsCount = CountOccurrences(adsTitle, "(");
+                var adsCount = CountOccurrences(adsTitle, "(");
 
                 Console.WriteLine($"Found {adsCount} ads in subject: {adsTitle}");
 
@@ -222,9 +221,7 @@ public class HttpServices : IHttpServices
     private async Task<string> GetJwtTokenAsync(string refreshToken, string cid)
     {
         var url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
-
-
-        // Set up headers
+        
         _httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
         _httpClient.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate, br");
         _httpClient.DefaultRequestHeaders.Add("Accept-Language", "vi");
@@ -268,7 +265,7 @@ public class HttpServices : IHttpServices
             var responseBody = await response.Content.ReadAsStringAsync();
 
             // Parse the JWT from the response
-            JObject jsonResponse = JObject.Parse(responseBody);
+            var jsonResponse = JObject.Parse(responseBody);
             var jwtToken = jsonResponse["access_token"].ToString();
 
             return jwtToken;
@@ -283,34 +280,30 @@ public class HttpServices : IHttpServices
     private async Task<string> GetUserProfileInfoAsync(string jwtToken, string cid)
     {
         var url = "https://graph.microsoft.com/beta/me/profile";
+        
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "Outlook-Android/2.0");
+        _httpClient.DefaultRequestHeaders.Add("Pragma", "no-cache");
+        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+        _httpClient.DefaultRequestHeaders.Add("ForceSync", "false");
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", jwtToken);
+        _httpClient.DefaultRequestHeaders.Add("X-AnchorMailbox", $"CID:{cid}");
+        _httpClient.DefaultRequestHeaders.Host = "substrate.office.com";
+        _httpClient.DefaultRequestHeaders.ConnectionClose = false;
 
-        using (var httpClient = new HttpClient())
+        try
         {
-            // Set up headers
-            httpClient.DefaultRequestHeaders.Add("User-Agent", "Outlook-Android/2.0");
-            httpClient.DefaultRequestHeaders.Add("Pragma", "no-cache");
-            httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-            httpClient.DefaultRequestHeaders.Add("ForceSync", "false");
-            httpClient.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", jwtToken);
-            httpClient.DefaultRequestHeaders.Add("X-AnchorMailbox", $"CID:{cid}");
-            httpClient.DefaultRequestHeaders.Host = "substrate.office.com";
-            httpClient.DefaultRequestHeaders.ConnectionClose = false;
+            // Send the GET request
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadAsStringAsync();
 
-            try
-            {
-                // Send the GET request
-                var response = await httpClient.GetAsync(url);
-                response.EnsureSuccessStatusCode();
-                var responseBody = await response.Content.ReadAsStringAsync();
-
-                return responseBody;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error while fetching user profile info: {ex.Message}");
-                return null;
-            }
+            return responseBody;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error while fetching user profile info: {ex.Message}");
+            return null;
         }
     }
 
